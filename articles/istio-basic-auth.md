@@ -6,7 +6,7 @@ topics: ["kubernetes", "istio"]
 published: true
 ---
 
-# istioで使ってBasic認証を行う
+# istioでWASMを使ってBasic認証を行う
 
 オフィシャルで紹介されていた。WASMを使う方法を試してみる。
 
