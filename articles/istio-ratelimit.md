@@ -28,12 +28,12 @@ istio(envoy)でRate-Limitをかけるモチベーションはアプリケーシ�
 ### envoyproxy/ratelimit
   - envoyのratelimit extension implements
   - (redis)実際に誰が、どれくらいアクセスしたのか保存しておくデータストア。
-  - **quoter設定管理**
+  - **クオータ設定管理**
   - prometheus statsd exporter
 
 ### **application(workload)**
   - envoyでHTTP requestを分析し、このrequestはどの `descriptor`に分類されるのかを決定する。(図のapp sidecar proxyのRateLimit部分)
-  - **quoterは管理しない**
+  - **クオータは管理しない**
 
 ### ingress gateway
 
