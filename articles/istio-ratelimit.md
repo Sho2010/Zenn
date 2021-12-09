@@ -3,7 +3,7 @@ title: "istioでリクエストRateLimitをかける"
 emoji: "🐓"
 type: "tech"
 topics: ["kubernetes", "istio"]
-published: false
+published: true
 ---
 
 # Global rate limitを導入する
