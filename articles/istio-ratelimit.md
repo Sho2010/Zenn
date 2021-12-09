@@ -1,22 +1,30 @@
 ---
-title: "istioでratelimitをかける"
+title: "istioでリクエストRateLimitをかける"
 emoji: "🐓"
 type: "tech"
-topics: ["kubernetes", "istio", "microservice"]
+topics: ["kubernetes", "istio"]
 published: false
 ---
 
 # Global rate limitを導入する
 
-istioを使ってAPI Rate-Limitを実装しよう。
+istioを使ってAPI Rate-Limitを実装する。
 
 様々なマイクロサービスの本やドキュメントには、APIには必ずRate-Limitをかけよう的なことが書いてあるが実際のところ大事なのはわかるけれど、各アプリケーションに個別に実装していったらきりがないのでつい後回しになってるといった事になりがち
 
-istio(envoy)でRate-Limitをかけるモチベーションはアプリケーションにまったく変更を入れることなく、言語、フレームワークに依存しない統一的な行うことでRatelimitの導入を楽に導入していく。
+istio(envoy)でRate-Limitをかけるモチベーションはアプリケーションにまったく変更を入れることなく(Zero Code Changes)、言語、フレームワークに依存しない統一的な行うことで導入を楽にしていく。
+
+# 最初にまとめ
+
+:::message
+- envoyでratelimitを適用する場合はratelimit 拡張サービスをデプロイする
+- **アプリケーション側にHTTPリクエストに内容に沿って制限をかけたい条件でDescriptorを記述する。**
+- **ratelimitサービス側に各Descriptorに対するクオータを記述する。**
+:::
 
 ## Overview
 
-今回適用するRate-Limitの大体の概要図
+今回適用するRate-Limitの概要図
 
 [istioオフィシャルのサンプル](https://istio.io/latest/docs/tasks/policy-enforcement/rate-limit/)ではingress gatewayに適用して全てのトラフィックに対してRateLimitをかけているが、今回は影響範囲を小さく試すために特定のWorkloadにのみ適用する。
 
@@ -28,7 +36,7 @@ istio(envoy)でRate-Limitをかけるモチベーションはアプリケーシ�
 ### envoyproxy/ratelimit
   - envoyのratelimit extension implements
   - (redis)実際に誰が、どれくらいアクセスしたのか保存しておくデータストア。
-  - **クオータ設定管理**
+  - **Descriptor クオータ設定管理**
   - prometheus statsd exporter
 
 ### **application(workload)**
@@ -42,7 +50,8 @@ istio(envoy)でRate-Limitをかけるモチベーションはアプリケーシ�
 
 ## 構成
 
-[example manifests](https://github.com/Sho2010/istio-example/blob/main/rate-limit)
+[example manifests](https://github.com/Sho2010/istio-example/blob/main/rate-limit)を作成したので、今後はこのファイルを元に解説する。
+
 ```
 .
 ├── envoy-ratelimit # envoyproxy/ratelimit deploy ratelimit namespace
@@ -59,16 +68,18 @@ istio(envoy)でRate-Limitをかけるモチベーションはアプリケーシ�
 ## 🚀 Deploy envoyproxy/ratelimit
 
 この時点では設定を変える必要はないのでそのままデプロイする。
-kustomizeを使っているが、全部のmanifestにnamespaceを設定するのがめんどくさくてそれにしか使ってないので個別にinstallしても問題ない。
+kustomizeを使っているが、全部のmanifestにnamespaceを設定するのがめんどくさくてnamespaceの設定にしか使ってないので個別にinstallしても問題ない。
 prometheusなどで使うmetricsが必要ないのであれば、statsd exporterはデプロイせずにratelimitのenvを`USE_STATSD=false`に変更してもよい
 
 ```sh
+$ kkubectl create cm statsd-config -n ratelimit --from-file ./statsd.yaml
 $ kustomize build | kubectl apply -f -
 ```
 
 ## 🚀 ratelimit対象のserviceをデプロイする
 
 とりあえず定番のDeployment + Service + Gateway + VirtualService + DestinationRule の基本構成でhttpbinをデプロイする。
+gatewayのhosts値を書き換えるくらいで動くはず
 
 サンプルの以下のファイル郡を適用していく。
 
@@ -215,7 +226,7 @@ spec:
           rate_limits:
             - actions:
               - request_headers: # 👀
-                  descriptor_key: service-level
+                  descriptor_key: service_level
                   header_name: X-SERVICE-LEVEL
             - actions:
               - header_value_match: # 👀
@@ -240,15 +251,15 @@ spec:
 1. `X-SERVICE-LEVEL: premium` がトップ画面`/`をリクエストした場合、headerは合致するがPATHは合致しないためdescriptorは以下のようになる。
 
 ```txt:descriptor
-("service-level", "premium")
+("service_level", "premium")
 ```
 
 2. `X-SERVICE-LEVEL: premium`が `/user-agent` にアクセスした場合。
 この場合は両方に合致するため、descriptorは以下のようになる。
 
 ```txt:descriptor
-("service-level", "premium")
-("header_match", "ua")
+("service_level", "premium")
+("header_match", "user_agent_path")
 ```
 
 あれ？ `header_match` descriptor keyはどこから出てきたのだろう？ 実はこれ定数で、`header_value_match`を使うと必ずdescriptor keyはheader_matchとなる
@@ -270,7 +281,7 @@ See: [RequestHeaders](https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/
 これらを踏まえて、自分はだいたい以下のような指針で運用することにした
 
 - HTTP `:path`, `:method`, `:authority` などが使いたい場合は **header_value_match**
-- その他は **request_headers**
+- その他は **request_headers** valueの取り扱いはratelimit側に書く
 :::
 
 Descriptorの決定方法がわかったのでいよいよDescriptorに対してのクオータを決定する！
@@ -284,11 +295,12 @@ Descriptorに対するクオーターはratelimite serviceの[ConfigMap](https:/
 ```yaml:configmap.yaml
 domain: "ratelimit-httpbin"  # httpbin/filter/limit.yamlに設定したdomainと一致させる！
 descriptors:
-  - key: service-level
+  - key: service_level
     value: "premium"
     rate_limit:
       unit: minute
       requests_per_unit: 10
+      shadow_mode: false
   - key: header_match
     value: "user_agent_path"
     rate_limit:
@@ -298,7 +310,10 @@ descriptors:
 
 この設定で以下のような動作になる
 - `X-SERVICE-LEVEL: premium` のリクエストは10req/min
- -`/user-agent`のリクエストは 1req/min
+- `/user-agent`のリクエストは 1req/min
+- [shadow_mode: false](https://github.com/envoyproxy/ratelimit#shadowmode)
+
+curl, browserで挙動を確認してみればリミットを超過した場合 `Too Many Requests`となるはず。
 
 📓 ここまでくれば大体ドキュメントを読めばだいたいなんとかなるので詳細はドキュメントを参照してください。
 - [オフィシャル](https://github.com/envoyproxy/ratelimit)
@@ -307,17 +322,9 @@ descriptors:
 - [blog](https://dev.to/tresmonauten/setup-an-ingress-rate-limiter-with-envoy-and-istio-1i9g)
 
 
-# まとめ
-
-:::message
-- envoyでratelimitを適用する場合はratelimit 拡張サービスをデプロイする
-- **アプリケーション側にHTTPリクエストに内容に沿って制限をかけたい条件でDescriptorを記述する。**
-- **ratelimitサービス側に各Descriptorに対するクオータを記述する。**
-:::
-
 # 📓 See also
 
 - [Github envoyproxy/ratelimit](https://github.com/envoyproxy/ratelimit)
 - [(istio doc)Enabling Rate Limits using Envoy](https://istio.io/latest/docs/tasks/policy-enforcement/rate-limit/)
-- [config.route.v3.RateLimit.Action](https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto#envoy-v3-api-msg-config-route-v3-ratelimit-action-headervaluematch)
+- [config.route.v3.RateLimit.Action](https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto#config-route-v3-ratelimit-action)
 - [my example manifests](https://github.com/Sho2010/istio-example/blob/main/rate-limit)
