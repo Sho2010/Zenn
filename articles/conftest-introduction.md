@@ -2,8 +2,8 @@
 title: "conftestでk8s manifestにテストを書こう"
 emoji: "🎴"
 type: "tech"
-topics: ["kubernetes", "conftest"]
-published: false
+topics: ["kubernetes", "conftest", "rego"]
+published: true
 ---
 
 # はじめに
@@ -256,10 +256,12 @@ msg := sprintf("imagePullPolicy is not found to container `%v` of Deployment `%v
 
 conftestで設定を自動テストすることによって以下のような多大なメリットがもたらされます。
 
+:::message
 - レビューの手間が省ける。
 - うっかり設定漏れがなくなる。
 - 初学者にベストプラクティスに強制的に従わせ、品質を担保し、広く知識を伝搬させることが可能となる。
 - regoが書けるようになればこの記事では触れなかったが、[Open Policy Agent(OPA)](https://www.openpolicyagent.org/)など応用範囲が広がる
+:::
 
 conftest導入してみてはいかがでしょうか？
 
@@ -272,4 +274,5 @@ conftest導入してみてはいかがでしょうか？
 - [[_]の挙動](https://www.openpolicyagent.org/docs/latest/policy-language/#variable-keys)
 - [公式のサンプル](https://www.conftest.dev/examples/)
 - [rego built-in functions](https://www.openpolicyagent.org/docs/latest/policy-reference/#built-in-functions)
+- [Zenn rego articles](https://zenn.dev/search?q=rego)
 
