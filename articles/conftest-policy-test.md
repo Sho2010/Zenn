@@ -27,39 +27,19 @@ test_imagePullPolicySet_not_set_on_deployment {
 }
 ```
 
-
 # Summary
 
+[articles/conftest-introduction]()の続き
+前の記事でk8sのmanifestにテストを書けるようになりました。
+今度は書いたPolicyそのものの正しさを担保するためにregoでユニットテストを書きます。
 
-```sh
-$ opa test . -v
-```
+regoのテストの書き方は以下のような素晴らしい記事があるので参照してもらうとして、
 
-今日のソフトウェア開発においてユニットテストの重要性に関してはもう今更語る必要もないでしょう。
-conftestの出現によって、yamlに対してユニットテストの実行が可能となりました。これによって設定不備をCIの自動テストの段階で検出することができます。
+- [abc](https://zenn.dev/mizutani/books/d2f1440cfbba94/viewer/rego-test)
+- [Conftestを用いたCIでのポリシーチェックの紹介](https://engineering.mercari.com/blog/entry/introduce_conftest/)
 
-主にk8sの設定しており
-見落としがちな設定などをテストによって担保することが可能です。
-
-初学者や、チームの様々なスキル
-ベストプラクティスに自然と従うことが可能となります。
-
-例えばconftestでk8s manifestに以下のような有用なテストを実行することができます。
-
-- pod tamplateは明示的に `ImagePullPolicy` を設定しなければならない
-- セキュリティ要件を満たすため、プライマリアプリケーションは`containers[].securityContext.runAsNonRoot = true` で起動しなければならない
-- 環境変数に明示的に `TZ` を指定しなければならない。
-- etc...etc...
-
-
-ただし、そのユニットテストの正しさを担保するためのテスト
-regoは若干クセのある言語なので初学者にとって自由に
-実際のyamlをユニットテストを書きながら、
-
-
-
-
-policyにも
+殆どのopa testのサンプルはtest対象のデータをyamlで記述してることが少ないです。
+k8sでconftestを利用する場合は、実際に想定している`yaml`をテストデータとして利用するのがよい。
 
 
 
@@ -92,7 +72,6 @@ test_imagePullPolicySet_not_set_on_deployment {
 	warn_imagePullPolicy_not_set["imagePullPolicy is not set to container nginx of Deployment some-app"] with input as input
 }
 ```
-
 
 ```rego
 package k8s.kustomize
