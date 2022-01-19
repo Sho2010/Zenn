@@ -3,10 +3,17 @@ title: "k8s client-goでラベルを使ってリソースを検索する"
 emoji: "📌"
 type: "tech"
 topics: ["kubernetes", "go"]
-published: false
+published: true
 ---
 
 client-goを使ってるとkubectl ではこうだけどどうやるんだっけ？ってことが結構起きるので諸々メモっていく
+
+## やりたいこと
+
+```sh
+$ kubectl get role -A -L 'app.kubernetes.io/managed-by'
+```
+
 今回は`LabelSelector`を使って特定のリソースを検索するやつ。
 `MatchLabels`を使ったRoleの検索例、別のResourceを検索したかったら別のAPIに差し替えればそのまま動く
 
@@ -14,7 +21,6 @@ client-goを使ってるとkubectl ではこうだけどどうやるんだっけ
 
 - https://pkg.go.dev/k8s.io/apimachinery@v0.22.2/pkg/apis/meta/v1#LabelSelector
 - https://pkg.go.dev/k8s.io/apimachinery@v0.22.2/pkg/apis/meta/v1#LabelSelectorRequirement
-
 
 ```go
 package main
@@ -74,6 +80,6 @@ func listExists(ctx context.Context) (*rbacv1.RoleList, error) {
 
 ~kubectl使えば？~
 
-### 参考資料
+### 参考
 
 - https://kubernetes.io/ja/docs/concepts/overview/working-with-objects/labels/
